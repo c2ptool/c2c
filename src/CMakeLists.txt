@@ -1,0 +1,216 @@
+include(ExternalProject)
+
+set(BOOST_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/boost_1_68_0)
+string(TOLOWER "${CMAKE_BUILD_TYPE}" BOOST_BUILD_TYPE)
+
+if("release" STREQUAL ${BOOST_BUILD_TYPE})
+    set(BOOST_LINK "static")
+else()
+    set(BOOST_LINK "shared")
+endif()
+
+
+if(WIN32)
+ set(BOOST_CXXFLAGS -std=c++14)
+else()
+ set(BOOST_CXXFLAGS -fPIC\ -std=c++14)
+endif()
+
+ExternalProject_Add(boost_prj
+ CONFIGURE_COMMAND cd ${BOOST_ROOT} && ./bootstrap.sh --prefix=${CMAKE_INSTALL_PREFIX} --with-python=no
+ BUILD_COMMAND cd ${BOOST_ROOT} && ./b2 ${CMAKE_N_BUILDPROC} link=${BOOST_LINK} variant=${BOOST_BUILD_TYPE} cxxflags=${BOOST_CXXFLAGS} threading=multi install --without-python
+ INSTALL_COMMAND ""
+ SOURCE_DIR ${BOOST_ROOT}
+ BINARY_DIR ${BOOST_ROOT}
+)
+
+set(SODIUM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libsodium-1.0.17)
+set(SODIUM_BUILD_DIR ${CMAKE_BINARY_DIR}/libsodium-1.0.17)
+
+if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
+    set(SODIUM_OPT --enable-opt --enable-shared=no --enable-static=yes)
+    set(SODIUM_CFLAGS "-g0 -O3")
+else()
+    set(SODIUM_OPT "")
+    set(SODIUM_CFLAGS="")
+endif()
+
+ExternalProject_Add(sodium_prj
+  CONFIGURE_COMMAND cp -R ${SODIUM_DIR} ${CMAKE_BINARY_DIR}
+  BUILD_COMMAND cd ${SODIUM_BUILD_DIR} && ./autogen.sh && ./configure --prefix=${CMAKE_INSTALL_PREFIX} ${SODIUM_OPT} CFLAGS=${SODIUM_CFLAGS} && make ${CMAKE_N_BUILDPROC} && make install
+  INSTALL_COMMAND  ""
+  SOURCE_DIR ${SODIUM_DIR}
+  BINARY_DIR ${SODIUM_DIR}
+)
+
+set(ZMQ_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libzmq-4.3.1)
+set(ZMQ_BUILD_DIR ${CMAKE_BINARY_DIR}/libzmq-4.3.1)
+
+if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
+    set(ZMQ_OPT --enable-static=yes --enable-shared=no)
+    set(ZMQ_CFLAGS "-g0 -O3")
+    set(ZMQ_CXXFLAGS "-g0 -O3")
+else()
+    set(ZMQ_OPT --enable-debug)
+    set(ZMQ_CFLAGS "")
+    set(ZMQ_CXXFLAGS "")
+endif()
+
+ExternalProject_Add(zeromq_prj
+  CONFIGURE_COMMAND cp -R ${ZMQ_DIR} ${CMAKE_BINARY_DIR}
+  BUILD_COMMAND cd ${ZMQ_BUILD_DIR} && ./autogen.sh && ./configure --prefix=${CMAKE_INSTALL_PREFIX} ${ZMQ_OPT} --with-libsodium PKG_CONFIG_PATH=${CMAKE_INSTALL_PREFIX}/lib/pkgconfig CFLAGS=${ZMQ_CFLAGS} CXXFLAGS=${ZMQ_CXXFLAGS} && make ${CMAKE_N_BUILDPROC} && make install
+  INSTALL_COMMAND  ""
+  SOURCE_DIR ${ZMQ_DIR}
+  BINARY_DIR ${ZMQ_DIR}
+)
+
+add_dependencies(zeromq_prj sodium_prj)
+
+set(CPPZMQ_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cppzmq-4.3.0)
+set(CPPZMQ_BUILD_DIR ${CMAKE_BINARY_DIR}/cppzmq-4.3.0)
+
+ExternalProject_Add(cppzmq_prj
+  CONFIGURE_COMMAND mkdir -p ${CPPZMQ_BUILD_DIR} && cd ${CPPZMQ_BUILD_DIR} && cmake -DCMAKE_PREFIX_PATH=${CMAKE_INSTALL_PREFIX}/lib/pkgconfig -DCPPZMQ_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} ${CPPZMQ_DIR}
+  BUILD_COMMAND cd ${CPPZMQ_BUILD_DIR} && make ${CMAKE_N_BUILDPROC} && make install
+  INSTALL_COMMAND ""
+  SOURCE_DIR ${CPPZMQ_DIR}
+  BINARY_DIR ${CPPZMQ_DIR}
+)
+
+add_dependencies(cppzmq_prj zeromq_prj)
+
+
+set(WEBSOCKETPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/websocketpp-0.8.1)
+set(WEBSOCKETPP_BUILD_DIR ${CMAKE_BINARY_DIR}/websocketpp-0.8.1)
+
+ExternalProject_Add(websocketpp_prj
+  CONFIGURE_COMMAND mkdir -p ${WEBSOCKETPP_BUILD_DIR} && cd ${WEBSOCKETPP_BUILD_DIR} && cmake -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DCMAKE_CXX_FLAGS=-I${CMAKE_INSTALL_PREFIX}/include ${WEBSOCKETPP_DIR}
+  BUILD_COMMAND cd ${WEBSOCKETPP_BUILD_DIR} && make ${CMAKE_N_BUILDPROC} install
+  INSTALL_COMMAND ""
+  SOURCE_DIR ${WEBSOCKETPP_DIR}
+  BINARY_DIR ${WEBSOCKETPP_DIR}
+)
+
+add_dependencies(websocketpp_prj boost_prj)
+
+set(MSGPACK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/msgpack-3.1.1)
+set(MSGPACK_BUILD_DIR ${CMAKE_BINARY_DIR}/msgpack-3.1.1)
+
+ExternalProject_Add(msgpack_prj
+  CONFIGURE_COMMAND mkdir -p ${MSGPACK_BUILD_DIR} && cd ${MSGPACK_BUILD_DIR} && cmake -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DMSGPACK_ENABLE_SHARED=OFF ${MSGPACK_DIR}
+  BUILD_COMMAND cd ${MSGPACK_BUILD_DIR} && make install
+  INSTALL_COMMAND ""
+  SOURCE_DIR ${MSGPACK_DIR}
+  BINARY_DIR ${MSGPACK_DIR}
+)
+
+add_dependencies(msgpack_prj boost_prj)
+
+set(RAPIDJSON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/rapidjson-1.1.0)
+set(RAPIDJSON_BUILD_DIR ${CMAKE_BINARY_DIR}/rapidjson-1.1.0)
+
+if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7.0)
+    set(RAPIDJSON_CXX_FLAGS -Wno-error=stringop-overflow\ -Wno-error=implicit-fallthrough -I${CMAKE_INSTALL_PREFIX}/include)
+else()
+    set(RAPIDJSON_CXX_FLAGS -I${CMAKE_INSTALL_PREFIX}/include)
+endif()
+
+ExternalProject_Add(rapidjson_prj
+  CONFIGURE_COMMAND mkdir -p ${RAPIDJSON_BUILD_DIR} && cd ${RAPIDJSON_BUILD_DIR} && cmake -DRAPIDJSON_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=${RAPIDJSON_CXX_FLAGS} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} ${RAPIDJSON_DIR}
+  BUILD_COMMAND cd ${RAPIDJSON_BUILD_DIR} && make install
+  INSTALL_COMMAND ""
+  SOURCE_DIR ${RAPIDJSON_DIR}
+  BINARY_DIR ${RAPIDJSON_DIR}
+)
+
+add_dependencies(rapidjson_prj boost_prj)
+
+set(LEVELDB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/leveldb)
+
+if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
+    set(LEVELDB_OPT "-O2 -DNDEBUG")
+    set(LEVELDB_LIB library)
+else()
+    set(LEVELDB_OPT "-g2")
+    set(LEVELDB_LIB "")
+endif()
+
+set(LEVELDB_PLATFORM_CXXFLAGS "-DLEVELDB_PLATFORM_POSIX")
+set(LEVELDB_BUILD_DIR ${CMAKE_BINARY_DIR}/leveldb)
+
+ExternalProject_Add(leveldb_prj
+  CONFIGURE_COMMAND cp -R ${LEVELDB_DIR} ${CMAKE_BINARY_DIR}
+  BUILD_COMMAND cd ${LEVELDB_BUILD_DIR} && make PLATFORM_CXXFLAGS=${LEVELDB_PLATFORM_CXXFLAGS} OUTDIR=${CMAKE_INSTALL_PREFIX}/lib OPT=${LEVELDB_OPT} ${LEVELDB_LIB}
+  INSTALL_COMMAND cp -R ${LEVELDB_DIR}/include/leveldb ${CMAKE_INSTALL_PREFIX}/include
+  SOURCE_DIR ${LEVELDB_DIR}
+  BINARY_DIR ${LEVELDB_DIR}
+)
+
+set(EASYLOGGINPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/easyloggingpp-9.96.5)
+set(EASYLOGGINPP_BUILD_DIR ${CMAKE_BINARY_DIR}/easyloggingpp-9.96.5)
+
+ExternalProject_Add(easylogginpp_prj
+  CONFIGURE_COMMAND mkdir -p ${EASYLOGGINPP_BUILD_DIR} && cd ${EASYLOGGINPP_BUILD_DIR} && cmake -Dbuild_static_lib=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} ${EASYLOGGINPP_DIR}
+  BUILD_COMMAND cd ${EASYLOGGINPP_BUILD_DIR} && make ${CMAKE_N_BUILDPROC} install
+  INSTALL_COMMAND ""
+  SOURCE_DIR ${EASYLOGGINPP_DIR}
+  BINARY_DIR ${EASYLOGGINPP_DIR}
+)
+
+set(LUAJIT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/LuaJIT-2.0.5)
+
+if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
+    set(LUAJIT_OPT "-fPIC -O2 -fomit-frame-pointer")
+    set(LUAJIT_DEBUG "-g0")
+    set(LUAJIT_BUILDMODE static)
+else()
+    set(LUAJIT_OPT "-fPIC -O0 -fomit-frame-pointer")
+    set(LUAJIT_DEBUG "-g3")
+    set(LUAJIT_BUILDMODE dynamic)
+endif()
+
+set(LUAJIT_BUILD_DIR ${CMAKE_BINARY_DIR}/LuaJIT-2.0.5)
+
+ExternalProject_Add(lua_prj
+  CONFIGURE_COMMAND cp -R ${LUAJIT_DIR} ${CMAKE_BINARY_DIR}
+  BUILD_COMMAND cd ${LUAJIT_BUILD_DIR} && make BUILDMODE=${LUAJIT_BUILDMODE} CCOPT=${LUAJIT_OPT} CCDEBUG=${LUAJIT_DEBUG} ${CMAKE_N_BUILDPROC} PREFIX=${CMAKE_INSTALL_PREFIX} install
+  INSTALL_COMMAND  ""
+  SOURCE_DIR ${LUAJIT_DIR}
+  BINARY_DIR ${LUAJIT_DIR}
+)
+
+set(SOL2_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sol2-2.20.6)
+set(SOL2_BUILD_DIR ${CMAKE_BINARY_DIR}/sol2-2.20.6)
+
+ExternalProject_Add(sol2_prj
+  CONFIGURE_COMMAND mkdir -p ${SOL2_BUILD_DIR} && cd ${SOL2_BUILD_DIR} && cmake -DTESTS=OFF -DEXAMPLES=OFF -DLUA_VERSION=5.1 -DLUA_INCLUDE_DIR=${CMAKE_INSTALL_PREFIX}/include/luajit-bc-2.0 -DLUA_LIBRARY_DIR=${CMAKE_INSTALL_PREFIX}/lib -DLUA_LIBRARIES=luajit-5.1 -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} ${SOL2_DIR}
+  BUILD_COMMAND cd ${SOL2_BUILD_DIR} && make all && mkdir -p ${CMAKE_INSTALL_PREFIX}/include/sol && cp ${SOL2_DIR}/single/sol/sol.hpp ${CMAKE_INSTALL_PREFIX}/include/sol/sol.hpp
+  INSTALL_COMMAND ""
+  SOURCE_DIR ${SOL2_DIR}
+  BINARY_DIR ${SOL2_DIR}
+)
+
+add_dependencies(sol2_prj lua_prj)
+
+set(LUA_CMSGPACK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lua-cmsgpack)
+set(LUA_CMSGPACK_BUILD_DIR ${CMAKE_BINARY_DIR}/lua-cmsgpack)
+
+ExternalProject_Add(lua_cmsgpack_prj
+  CONFIGURE_COMMAND mkdir -p ${LUA_CMSGPACK_BUILD_DIR} && cd ${LUA_CMSGPACK_BUILD_DIR} && cmake -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DLUA_INCLUDE_DIR=${LUAJIT_DIR}/src -DLUA_LIB_DIR=${LUAJIT_BUILD_DIR}/src -DCMAKE_CXX_FLAGS="-fPIC" ${LUA_CMSGPACK_DIR}
+  BUILD_COMMAND cd ${LUA_CMSGPACK_BUILD_DIR} && make ${CMAKE_N_BUILDPROC} && make install
+  INSTALL_COMMAND ""
+  SOURCE_DIR ${LUA_CMSGPACK_DIR}
+  BINARY_DIR ${LUA_CMSGPACK_DIR}
+)
+
+add_dependencies(lua_cmsgpack_prj lua_prj)
+
+set(LUASOCKET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/luasocket)
+set(LUASOCKET_BUILD_DIR ${CMAKE_BINARY_DIR}/luasocket)
+
+add_subdirectory(variant)
+add_subdirectory(p2p)
+#add_subdirectory(qc2c)
+#add_subdirectory(app)
+#add_subdirectory(test)
+

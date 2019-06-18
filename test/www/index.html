@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+    <title>C2C</title>
+    <script src="sodium.js" type="text/javascript"></script>
+    <script src="jquery.min.js" type="text/javascript"></script>
+    <script type = "text/javascript">
+         function WebSocketTest(url) {
+            
+            if ("WebSocket" in window) {
+
+                //var key = sodium.crypto_box_keypair()
+                //$("#sk").text(sodium.to_hex(key.privateKey))
+                //$("#pk").text(sodium.to_hex(key.publicKey))
+
+                var self_sk = sodium.from_hex("4274d69925d9adf7cc447413f751cb42f88b8f7df0d968aca837fbafbfe8537578656c3b13330712a3ba0de64da9c6ab44822a2b19fe4688c8393419f354d8cd")
+                var self_pk = sodium.from_hex("78656c3b13330712a3ba0de64da9c6ab44822a2b19fe4688c8393419f354d8cd")
+
+                alert("WebSocket is supported by your Browser!");
+
+                var parts = url.split('?');
+                if(parts.length>=2)
+                    url = parts[0];
+
+                parts = url.split('#');
+                if(parts.length>=2)
+                    url = parts[0];
+               
+                // Let us open a web socket
+                var ws = new WebSocket(url, "data");
+
+                var get_identify_tn_bytes = ''
+
+                var get_identify_id = ''
+                var get_identify_tn = ''
+
+                ws.onopen = function() {
+
+                    get_identify_id = sodium.randombytes_buf(16)
+                    get_identify_tn = sodium.randombytes_buf(16)
+
+                    var msg = new Object();
+                    msg.jsonrpc = "2.0";
+                    msg.id = Array.from(get_identify_id);
+                    msg.method = "get_identify";
+                    msg.params = [Array.from(get_identify_tn), false];
+
+                    ws.send(JSON.stringify(msg));
+
+                    get_identify_id = (new Uint8Array(get_identify_id)).toString();
+                };
+                
+                ws.onmessage = function (evt) { 
+
+                    var msg = JSON.parse(evt.data);
+
+                    var id = (new Uint8Array(msg.id)).toString();
+
+                    if(id == get_identify_id) {
+
+                        var pk = new Uint8Array(msg.result[0])
+                        var sg = new Uint8Array(msg.result[1])
+
+                        if(sodium.crypto_sign_verify_detached(sg, get_identify_tn, pk))
+                        {
+                            alert("OK!!! node id: "+sodium.to_hex(pk));
+                        }
+                        else
+                        {
+                            alert("error node id: "+sodium.to_hex(pk));
+                        }
+                    }
+                    else if(msg.method == "get_identify") {
+
+                        var tn = new Uint8Array(msg.params[0])
+                        var with_digest = msg.params[1]
+                        var sg = sodium.crypto_sign_detached(tn, self_sk)
+
+                        var rc = new Object();
+                        rc.jsonrpc = "2.0";
+                        rc.id = msg.id;
+                        rc.result = [Array.from(self_pk), Array.from(sg)];
+
+                        ws.send(JSON.stringify(rc));
+                    }
+                };
+                
+                ws.onclose = function() { 
+                  
+                    // websocket is closed.
+                    alert("Connection is closed..."); 
+                };
+            } else {
+              
+                // The browser doesn't support WebSocket
+                alert("WebSocket NOT supported by your Browser!");
+            }
+         }
+      </script>
+<body>
+    <h1>Hello World!!!</h1>
+    <p>The requested URL / was found on this server.</p>
+    <div id = "sse">
+        <a href = 'javascript:WebSocketTest("wss://"+document.URL.substr(8))'>C2C</a>
+    </div>
+    <!--div id='pk'></div>
+    <div id='sk'></div-->
+</body>
+</head>
+</html>
