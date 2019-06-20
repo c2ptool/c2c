@@ -62,7 +62,9 @@ set(c2c_lib
     pthread
     ssl
     crypto
-    sodium)
+    sodium
+    m
+    dl)
 
 add_library(c2c ${c2c_src})
 
